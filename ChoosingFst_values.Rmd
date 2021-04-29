@@ -1,0 +1,86 @@
+---
+title: "Fst SLiM"
+output: html_document
+---
+
+```{r}
+suppressMessages(library(tidyverse))
+```
+
+
+Function to calculate Fst
+
+```{r}
+calcFst <- function(p1, p2, N1, N2) {
+q1 <- 1 - p1
+q2 <- 1 - p2
+Ntotal <- N1 + N2
+p_bar <- ((p1*N1) + (p2*N2)) / (Ntotal)
+q_bar <- ((q1*N1) + (q2*N2)) / (Ntotal)
+Hexp1 <- 2 * p1 * q1
+Hexp2 <- 2 * p2 * q2
+Hs <- ((Hexp1*N1) + (Hexp2*N2))/(Ntotal)
+Ht <- 2 * p_bar * q_bar
+Fst <- (Ht-Hs) / Ht
+return(Fst)
+}
+```
+
+
+I limited the source population sizes to 2 diploid individuals because calling local ancestry on whole genome SLiM files can be very slow with too many roots.
+
+```{r}
+#vector of possible allele frequencies with N=2
+p1_vector <- c(0, 0.25, 0.5, 0.75, 1)
+p2_vector <- c(0, 0.25, 0.5, 0.75, 1)
+
+#grid of possible pairs of allele frequencies for source populations
+gs <- cross_df(list(p1=p1_vector, p2=p2_vector))
+head(gs)
+```
+
+Calculate Fst for all pairs of source population allele frequencies
+
+```{r}
+Fst_vector <- mapply(FUN=calcFst,p1=gs$p1, p2=gs$p2, N1=4, N2=4)
+gs$Fst <- Fst_vector
+
+#all possible Fst values
+levels(as.factor(gs$Fst))
+```
+
+I picked Fst values of 0, 0.25, 0.60, and 1 because they were simplest. I selected possible pairs of allele frequencies that gave each Fst value
+
+```{r}
+gs[which(gs$Fst==0),]
+gs[which(gs$Fst==0.25),]
+gs[which(gs$Fst==0.6),]
+gs[which(gs$Fst==1),]
+```
+
+I picked the allele frequencies that would make the most sense to do a local ancestry outlier analysis for P1 ancestry. 
+
+In the end, I ran 10 simulations each of:
+
+Fst = 0; p1 = 0.5; p2 = 0.5
+Fst = 0.25; p1 = 0.75; p2 = 0.25
+Fst = 0.6; p1 = 1; p2 = 0.25
+Fst = 1; p1 = 1; p2 = 0
+
+```{r}
+FST_results <- read.table(file = "/Users/iman/Dropbox (Duke Bio_Ea)/GoldbergLab/Datasets/PhilTrans_Fst_whole-autosome_ancestryprop.txt", header=TRUE)
+
+Fst_results_grouped <- FST_results %>% group_by(as.factor(Fst)) %>% summarise(median=median(bene_rank))
+
+Fst_results_grouped
+
+names(Fst_results_grouped) <- c("Fst", "median_percentile_rank")
+
+ggplot(ungroup(Fst_results_grouped), aes(x=as.numeric(as.character(Fst)), y=median_percentile_rank)) +
+  geom_point(size=2) +
+  geom_line(group=1) +
+  labs(y="median percentile rank", x="Fst") +
+  theme_classic() +
+  theme(aspect.ratio = 1)
+```
+
